@@ -11,7 +11,7 @@ class User:
             self.users[username] = password
             print(f"User '{username}' registered successfully!")
 
-    def Log in(self, username, password):
+    def Login(self, username, password):
         if username not in self.users:
             print("User not found. Please register first.")
         elif self.users[username] != password:
