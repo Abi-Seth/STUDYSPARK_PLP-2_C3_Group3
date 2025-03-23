@@ -48,15 +48,24 @@ def main():
         print("1. Log in")
         print("2. Register")
         print("3. Logout")
+        print("4. Exit")
 
-        choice = input("\n Choose an option: ")
+        choice = input("\nChoose an option: ")
         if choice == '1':
             # call the login function
+            print("login person")
+            break
         elif choice == '2':
             # call the register function
+            print("Register person")
+            break
         elif choice == '3':
             # delete the current session
             print("Goodbye for now!")
+            break
+        elif choice == '4':
+            print("Goodbye for now!")
+            exit()
             break
         else:
             print("You choose the wrong thing!")
