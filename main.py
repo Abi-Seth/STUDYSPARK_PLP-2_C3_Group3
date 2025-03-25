@@ -83,19 +83,19 @@ class User:
         return next((user for user in self.users if user["username"] == self.logged_in_user), None)
 
 class StudySession:
-    """Handles study sessions and AI encouragement messages."""
+    """Handle study sessions and AI encouragement messages."""
 
 class ProgressReport:
-    """Handles user progress tracking and reporting."""
+    """Handle user progress tracking and reporting."""
 
 class Leaderboard:
-    """Handles user rankings and leaderboard display."""
+    """Handle user rankings and leaderboard display."""
 
 class StudyGroup:
-    """Handles study groups and resources."""
+    """Handle study groups and resources."""
 
 class StudyReminder:
-    """Handles study reminders and scheduling."""
+    """Handle study reminders and scheduling."""
 
 def main():
     user = User()
