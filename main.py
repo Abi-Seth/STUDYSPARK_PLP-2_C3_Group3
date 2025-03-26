@@ -83,7 +83,6 @@ class User:
         return next((user for user in self.users if user["username"] == self.logged_in_user), None)
 
 class StudySession:
-<<<<<<< HEAD
     """Handles study session tracking for users"""
 
     def __init__(self, filename="database/study_sessions.json"):
