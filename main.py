@@ -31,7 +31,67 @@ class User:
         return self.logged_in_user is not None
 
 class StudySession:
-    """This is the study session class"""
+    """Handle study sessions and AI encouragement messages."""
+
+    def __init__(self, filename="database/study_sessions.json"):
+        self.filename = filename
+        self.sessions = self.load_sessions()
+        self.active_sessions = {}  # Track ongoing sessions for users
+
+    def load_sessions(self):
+        """Load study session data from a file."""
+        try:
+            with open(self.filename, "r") as file:
+                return json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def save_sessions(self):
+        """Save study session data to a file."""
+        with open(self.filename, "w") as file:
+            json.dump(self.sessions, file, indent=4)
+
+    def start_session(self, user):
+        """Start a study session for the logged-in user."""
+        if user.is_logged_in():
+            username = user.logged_in_user
+            session_id = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.active_sessions[username] = {"session_id": session_id, "start_time": start_time}
+            print(f"==> Study session started for {username} at {start_time}.")
+        else:
+            print("==> Please log in to start a study session.")
+
+    def end_session(self, user):
+        """End the current study session for the logged-in user."""
+        if user.is_logged_in():
+            username = user.logged_in_user
+            if username in self.active_sessions:
+                session_data = self.active_sessions.pop(username)
+                end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                session_data["end_time"] = end_time
+                session_data["duration"] = str(datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S") - datetime.strptime(session_data["start_time"], "%Y-%m-%d %H:%M:%S"))
+                self.sessions[session_data["session_id"]] = session_data
+                self.save_sessions()
+                print(f"==> Study session ended for {username}. Duration: {session_data['duration']}.")
+            else:
+                print("==> No active study session found.")
+        else:
+            print("==> Please log in to end a study session.")
+
+    def view_all_sessions(self, user):
+        """View all past study sessions for the logged-in user."""
+        if user.is_logged_in():
+            username = user.logged_in_user
+            user_sessions = [session for session in self.sessions.values() if session["session_id"].startswith(username)]
+            if user_sessions:
+                print(f"\nAll study sessions for {username}:")
+                for session in user_sessions:
+                    print(f"Session ID: {session['session_id']}, Start: {session['start_time']}, End: {session.get('end_time', 'In Progress')}, Duration: {session.get('duration', 'Ongoing')}")
+            else:
+                print("==> No study sessions found.")
+        else:
+            print("==> Please log in to view your study sessions.")
 
 class StudyGroups:
     """This is the study groups class"""
