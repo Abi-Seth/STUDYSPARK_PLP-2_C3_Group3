@@ -31,15 +31,14 @@ class User:
         return self.logged_in_user is not None
 
 class StudySession:
-    """Handle study sessions and AI encouragement messages."""
+    """Handles study session tracking for users"""
 
     def __init__(self, filename="database/study_sessions.json"):
         self.filename = filename
         self.sessions = self.load_sessions()
-        self.active_sessions = {}  # Track ongoing sessions for users
 
     def load_sessions(self):
-        """Load study session data from a file."""
+        """Load study sessions from file."""
         try:
             with open(self.filename, "r") as file:
                 return json.load(file)
@@ -47,52 +46,66 @@ class StudySession:
             return {}
 
     def save_sessions(self):
-        """Save study session data to a file."""
+        """Save study sessions to file."""
         with open(self.filename, "w") as file:
             json.dump(self.sessions, file, indent=4)
 
     def start_session(self, user):
-        """Start a study session for the logged-in user."""
-        if user.is_logged_in():
-            username = user.logged_in_user
-            session_id = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            self.active_sessions[username] = {"session_id": session_id, "start_time": start_time}
-            print(f"==> Study session started for {username} at {start_time}.")
-        else:
-            print("==> Please log in to start a study session.")
+        """Starts a study session for a logged-in user."""
+        if user.logged_in_user is None:
+            print("Please log in before starting a session.")
+            return
+
+        username = user.logged_in_user
+        session_name = input("Enter the study session name: ")
+        duration = int(input("Enter the duration of the session in minutes: "))
+
+        start_time = time.time()
+
+        if username not in self.sessions:
+            self.sessions[username] = []
+
+        self.sessions[username].append({
+            "session_name": session_name,
+            "duration": duration,
+            "start_time": start_time,
+            "status": "In Progress"
+        })
+
+        self.save_sessions()
+        print(f"\nSession '{session_name}' has started for {username}.")
+        print(f"Duration: {duration} minutes. Stay focused!")
 
     def end_session(self, user):
-        """End the current study session for the logged-in user."""
-        if user.is_logged_in():
-            username = user.logged_in_user
-            if username in self.active_sessions:
-                session_data = self.active_sessions.pop(username)
-                end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                session_data["end_time"] = end_time
-                session_data["duration"] = str(datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S") - datetime.strptime(session_data["start_time"], "%Y-%m-%d %H:%M:%S"))
-                self.sessions[session_data["session_id"]] = session_data
-                self.save_sessions()
-                print(f"==> Study session ended for {username}. Duration: {session_data['duration']}.")
-            else:
-                print("==> No active study session found.")
-        else:
-            print("==> Please log in to end a study session.")
+        """Ends the last study session for a logged-in user."""
+        if user.logged_in_user is None:
+            print("Please log in before ending a session.")
+            return
 
-    def view_all_sessions(self, user):
-        """View all past study sessions for the logged-in user."""
-        if user.is_logged_in():
-            username = user.logged_in_user
-            user_sessions = [session for session in self.sessions.values() if session["session_id"].startswith(username)]
-            if user_sessions:
-                print(f"\nAll study sessions for {username}:")
-                for session in user_sessions:
-                    print(f"Session ID: {session['session_id']}, Start: {session['start_time']}, End: {session.get('end_time', 'In Progress')}, Duration: {session.get('duration', 'Ongoing')}")
-            else:
-                print("==> No study sessions found.")
-        else:
-            print("==> Please log in to view your study sessions.")
+        username = user.logged_in_user
 
+        if username not in self.sessions or not self.sessions[username]:
+            print("No active study session found.")
+            return
+
+        last_session = self.sessions[username][-1]
+
+        if last_session["status"] != "In Progress":
+            print("No active study session to end.")
+            return
+
+        end_time = time.time()
+        elapsed_time = (end_time - last_session["start_time"]) / 60  # Convert seconds to minutes
+
+        last_session["status"] = "Completed"
+        last_session["end_time"] = end_time
+        last_session["actual_duration"] = round(elapsed_time, 2)
+
+        self.save_sessions()
+        print(f"\nSession '{last_session['session_name']}' completed!")
+        print(f"Total time spent: {elapsed_time:.2f} minutes.")
+
+   
 class StudyGroups:
     """This is the study groups class"""
 
