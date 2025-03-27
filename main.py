@@ -159,8 +159,6 @@ class StudySession:
 
    
 class StudyGroups:
-    """This is the study groups class"""
-=======
     """Handle study sessions and AI encouragement messages."""
 
 class ProgressReport:
@@ -174,7 +172,6 @@ class StudyGroup:
 
 class StudyReminder:
     """Handle study reminders and scheduling."""
->>>>>>> c917ed6f1c0a0114169ec59cb1a2296ca10e3e73
 
 def main():
     user = User()
