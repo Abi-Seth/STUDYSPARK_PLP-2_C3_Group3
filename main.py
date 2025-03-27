@@ -166,6 +166,23 @@ class ProgressReport:
 
 class Leaderboard:
     """Handle user rankings and leaderboard display."""
+   def __init__(self, user_manager):
+        self.user_manager = user_manager
+    
+    def view_leaderboard(self):
+        print("\n=== LEADERBOARD ===")
+        print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
+            "Rank", "Username", "Streak", "Points", "Badges"))
+
+        sorted_users = sorted(
+            self.user_manager.users,
+            key=lambda x: (-x['streak'], -x['points'], len(x['badges']))
+        )
+        
+        for rank, user in enumerate(sorted_users[:10], 1):
+            badges = ', '.join(user['badges'][:3]) + ('...' if len(user['badges']) > 3 else '')
+            print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
+                rank, user['username'], user['streak'], user['points'], badges))
 
 class StudyGroup:
     """Handle study groups and resources."""
