@@ -163,6 +163,79 @@ class StudyGroups:
 
 class ProgressReport:
     """Handle user progress tracking and reporting."""
+    def __init__(self, user_manager, session_manager):
+        self.user_manager = user_manager
+        self.session_manager = session_manager
+    
+    def view_report(self):
+        if not self.user_manager.is_logged_in():
+            print("==> Please log in to view your progress report.")
+            return
+        
+        user = self.user_manager.get_current_user()
+        if not user:
+            return
+        
+        print("\n=== YOUR PROGRESS REPORT ===")
+        print(f"Current Streak: {user['streak']} days")
+        print(f"Total Points: {user['points']}")
+        print(f"Badges Earned: {', '.join(user['badges']) if user['badges'] else 'None'}")
+
+        total_minutes = 0
+        if self.user_manager.logged_in_user in self.session_manager.sessions:
+            for session in self.session_manager.sessions[self.user_manager.logged_in_user]:
+                if session['actual_duration']:
+                    total_minutes += session['actual_duration']
+        
+        hours = int(total_minutes // 60)
+        minutes = int(total_minutes % 60)
+        print(f"Total Study Time: {hours} hours and {minutes} minutes")
+
+        self.check_badges(user)
+
+        print("\n=== PERSONALIZED MESSAGE ===")
+        print(self.generate_personalized_message(user))
+    
+    def check_badges(self, user):
+        new_badges = []
+        
+        if user['streak'] >= 7 and "7-Day Streak" not in user['badges']:
+            new_badges.append("7-Day Streak")
+        if user['streak'] >= 30 and "30-Day Streak" not in user['badges']:
+            new_badges.append("30-Day Streak")
+        if user['points'] >= 1000 and "1000 Points" not in user['badges']:
+            new_badges.append("1000 Points")
+        
+        if new_badges:
+            user['badges'].extend(new_badges)
+            self.user_manager.save_users()
+            print(f"\n==> New Badges Earned: {', '.join(new_badges)}")
+    
+    def generate_personalized_message(self, user):
+        messages = []
+        
+        if user['streak'] == 0:
+            messages.append("It's a great day to start a new streak!")
+        elif user['streak'] < 3:
+            messages.append(f"Your {user['streak']}-day streak is a good start! Keep it going.")
+        elif user['streak'] < 7:
+            messages.append(f"Awesome! You're on a {user['streak']}-day streak. You're building great habits!")
+        else:
+            messages.append(f"Wow! A {user['streak']}-day streak! You're crushing it!")
+        
+        if user['points'] < 100:
+            messages.append("Every minute of study counts. Keep adding to your points!")
+        elif user['points'] < 500:
+            messages.append(f"You've earned {user['points']} points already. Great progress!")
+        else:
+            messages.append(f"With {user['points']} points, you're showing serious dedication!")
+        
+        if not user['badges']:
+            messages.append("Complete challenges to earn your first badge!")
+        else:
+            messages.append(f"Your badges show your commitment: {', '.join(user['badges'])}")
+        
+        return " ".join(messages)
 
 class Leaderboard:
     """Handle user rankings and leaderboard display."""
