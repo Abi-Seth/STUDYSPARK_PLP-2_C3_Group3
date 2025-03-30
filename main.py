@@ -186,9 +186,54 @@ class Leaderboard:
 
 class StudyGroup:
     """Handle study groups and resources."""
+    def __init__(self, user_manager):
+        self.user_manager = user_manager
 
-class StudyReminder:
-    """Handle study reminders and scheduling."""
+    def modify_schedule(self):
+        if not self.user_manager.is_logged_in():
+            print("==> Please log in to modify your study schedule.")
+            return
+
+        user = self.user_manager.get_current_user()
+        if not user:
+            return
+
+        print("\nYour current reminders:")
+        for i, reminder in enumerate(user["study_reminders"], 1):
+            print(f"{i}. {reminder['time']} - {reminder['days']}")
+
+        print("\n1. Add new reminder")
+        print("2. Remove reminder")
+        choice = input("Choose an option: ")
+
+        if choice == "1":
+            time = input("Enter reminder time (HH:MM format): ")
+            days = input("Enter days (comma-separated, e.g., Mon,Tue,Wed): ")
+
+            user["study_reminders"].append({
+                "time": time,
+                "days": days,
+                "enabled": True
+            })
+            self.user_manager.save_users()
+            print("==> Reminder added successfully!")
+        elif choice == "2":
+            if not user["study_reminders"]:
+                print("==> No reminders to remove.")
+                return
+
+            try:
+                index = int(input("Enter reminder number to remove: ")) - 1
+                if 0 <= index < len(user["study_reminders"]):
+                    user["study_reminders"].pop(index)
+                    self.user_manager.save_users()
+                    print("==> Reminder removed successfully!")
+                else:
+                    print("==> Invalid selection.")
+            except ValueError:
+                print("==> Please enter a valid number.")
+        else:
+            print("==> Invalid choice.")
 
 def main():
     user = User()
