@@ -1,53 +1,60 @@
-import time
-import json
+import mysql.connector
+from mysql.connector import Error
 import hashlib
-import requests
 from datetime import datetime, timedelta
-import os
+import requests
 
-os.makedirs("database", exist_ok=True)
-
-class User:
-    """Handles user registration, login, and session management."""
-    def __init__(self, filename="database/users.json"):
-        self.filename = filename
-        self.users = self.load_users()
-        self.logged_in_user = None
-
-    def load_users(self):
+# Database connection class
+class Database:
+    def __init__(self):
         try:
-            with open(self.filename, "r") as file:
-                return json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
+            self.connection = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                port=3311,
+                password="",
+                database="studyspark"
+            )
+            self.cursor = self.connection.cursor(dictionary=True)
+        except Error as e:
+            print(f"Error connecting to MySQL: {e}")
+            exit(1)
 
-    def save_users(self):
-        with open(self.filename, "w") as file:
-            json.dump(self.users, file, indent=4)
+    def commit(self):
+        self.connection.commit()
+
+    def close(self):
+        self.cursor.close()
+        self.connection.close()
+
+# User management class
+class User:
+    def __init__(self, db):
+        self.db = db
+        self.logged_in_user = None
 
     def hash_password(self, password):
         return hashlib.sha256(password.encode()).hexdigest()
 
     def register(self, username, password):
-        if any(user["username"] == username for user in self.users):
+        cursor = self.db.cursor
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        if cursor.fetchone():
             print("==> Username already exists. Please choose a different one.")
         else:
             hashed_password = self.hash_password(password)
-            self.users.append({
-                "username": username, 
-                "password": hashed_password, 
-                "streak": 0, 
-                "points": 0, 
-                "badges": [],
-                "last_study_date": None,
-                "study_reminders": []
-            })
-            self.save_users()
+            cursor.execute(
+                "INSERT INTO users (username, password, streak, points, last_study_date) VALUES (%s, %s, %s, %s, %s)",
+                (username, hashed_password, 0, 0, None)
+            )
+            self.db.commit()
             print(f"==> User '{username}' registered successfully!")
 
     def login(self, username, password):
+        cursor = self.db.cursor
         hashed_password = self.hash_password(password)
-        user = next((user for user in self.users if user["username"] == username and user["password"] == hashed_password), None)
+        cursor.execute("SELECT * FROM users WHERE username = %s AND password = %s", (username, hashed_password))
+        user = cursor.fetchone()
         if not user:
             print("==> Invalid username or password. Please try again.")
         else:
@@ -56,18 +63,25 @@ class User:
             self.update_streak(username)
 
     def update_streak(self, username):
-        user = next((u for u in self.users if u["username"] == username), None)
-        if user:
+        cursor = self.db.cursor
+        cursor.execute("SELECT last_study_date, streak FROM users WHERE username = %s", (username,))
+        result = cursor.fetchone()
+        if result:
+            last_study_date = result['last_study_date']
+            streak = result['streak']
             today = datetime.now().date()
-            last_study = datetime.strptime(user["last_study_date"], "%Y-%m-%d").date() if user["last_study_date"] else None
-            
-            if last_study:
-                if today == last_study + timedelta(days=1):
-                    user["streak"] += 1
-                elif today > last_study + timedelta(days=1):
-                    user["streak"] = 1
-            user["last_study_date"] = today.strftime("%Y-%m-%d")
-            self.save_users()
+            if last_study_date:
+                if today == last_study_date + timedelta(days=1):
+                    streak += 1
+                elif today > last_study_date + timedelta(days=1):
+                    streak = 1
+            else:
+                streak = 1
+            cursor.execute(
+                "UPDATE users SET streak = %s, last_study_date = %s WHERE username = %s",
+                (streak, today, username)
+            )
+            self.db.commit()
 
     def logout(self):
         if self.logged_in_user:
@@ -80,117 +94,22 @@ class User:
         return self.logged_in_user is not None
 
     def get_current_user(self):
-        return next((user for user in self.users if user["username"] == self.logged_in_user), None)
+        if not self.logged_in_user:
+            return None
+        cursor = self.db.cursor
+        cursor.execute("SELECT * FROM users WHERE username = %s", (self.logged_in_user,))
+        return cursor.fetchone()
 
+# Study session management class
 class StudySession:
     """Handles study session tracking for users"""
 
-    def __init__(self, filename="database/study_sessions.json"):
-        self.filename = filename
-        self.sessions = self.load_sessions()
-
-    def load_sessions(self):
-        """Load study sessions from file."""
-        try:
-            with open(self.filename, "r") as file:
-                return json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
-
-    def save_sessions(self):
-        """Save study sessions to file."""
-        with open(self.filename, "w") as file:
-            json.dump(self.sessions, file, indent=4)
-
-    def start_session(self, user):
-        """Starts a study session for a logged-in user."""
-        if user.logged_in_user is None:
-            print("Please log in before starting a session.")
-            return
-
-        username = user.logged_in_user
-        session_name = input("Enter the study session name: ")
-        duration = int(input("Enter the duration of the session in minutes: "))
-
-        start_time = time.time()
-
-        if username not in self.sessions:
-            self.sessions[username] = []
-
-        self.sessions[username].append({
-            "session_name": session_name,
-            "duration": duration,
-            "start_time": start_time,
-            "status": "In Progress"
-        })
-
-        self.save_sessions()
-        print(f"\nSession '{session_name}' has started for {username}.")
-        print(f"Duration: {duration} minutes. Stay focused!")
-
-    def end_session(self, user):
-        """Ends the last study session for a logged-in user."""
-        if user.logged_in_user is None:
-            print("Please log in before ending a session.")
-            return
-
-        username = user.logged_in_user
-
-        if username not in self.sessions or not self.sessions[username]:
-            print("No active study session found.")
-            return
-
-        last_session = self.sessions[username][-1]
-
-        if last_session["status"] != "In Progress":
-            print("No active study session to end.")
-            return
-
-        end_time = time.time()
-        elapsed_time = (end_time - last_session["start_time"]) / 60  # Convert seconds to minutes
-
-        last_session["status"] = "Completed"
-        last_session["end_time"] = end_time
-        last_session["actual_duration"] = round(elapsed_time, 2)
-
-        self.save_sessions()
-        print(f"\nSession '{last_session['session_name']}' completed!")
-        print(f"Total time spent: {elapsed_time:.2f} minutes.")
-    
-    def view_all_sessions(self, user):
-        if not user.is_logged_in():
-            print("==> Please log in to view your sessions.")
-            return
-        
-        if user.logged_in_user not in self.sessions or not self.sessions[user.logged_in_user]:
-            print("==> No sessions found.")
-            return
-        
-        print("\nYour Study Sessions:")
-        print("{:<5} {:<20} {:<15} {:<15} {:<15} {:<10}".format(
-            "No.", "Name", "Start Time", "End Time", "Duration", "Status"))
-        
-        for i, session in enumerate(self.sessions[user.logged_in_user], 1):
-            duration = f"{session['actual_duration']} min" if session['actual_duration'] else "N/A"
-            end_time = session['end_time'] if session['end_time'] else "N/A"
-            print("{:<5} {:<20} {:<15} {:<15} {:<15} {:<10}".format(
-                i, session['name'], session['start_time'], end_time, duration, session['status']))
-
-    def get_encouragement(self):
-        try:
-            response = requests.get("https://api.quotable.io/random?tags=inspirational")
-            if response.status_code == 200:
-                data = response.json()
-                return f"\n==> Encouragement: {data['content']} - {data['author']}\n"
-        except requests.exceptions.RequestException:
-            pass
-        return "\n==> Keep going! Your hard work will pay off.\n"
-
+# Progress report class
 class ProgressReport:
-    """Handle user progress tracking and reporting."""
-    def __init__(self, user_manager, session_manager):
+    def __init__(self, user_manager, session_manager, db):
         self.user_manager = user_manager
         self.session_manager = session_manager
+        self.db = db
     
     def view_report(self):
         if not self.user_manager.is_logged_in():
@@ -201,39 +120,51 @@ class ProgressReport:
         if not user:
             return
         
+        cursor = self.db.cursor
+        cursor.execute("SELECT badge_name FROM badges WHERE user_id = %s", (user['user_id'],))
+        badges = [row['badge_name'] for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT SUM(actual_duration) as total FROM study_sessions WHERE user_id = %s AND status = %s", 
+                       (user['user_id'], "Completed"))
+        total_minutes = cursor.fetchone()['total'] or 0
+        hours = int(total_minutes // 60)
+        minutes = int(total_minutes % 60)
+        
         print("\n=== YOUR PROGRESS REPORT ===")
         print(f"Current Streak: {user['streak']} days")
         print(f"Total Points: {user['points']}")
-        print(f"Badges Earned: {', '.join(user['badges']) if user['badges'] else 'None'}")
-
-        total_minutes = 0
-        if self.user_manager.logged_in_user in self.session_manager.sessions:
-            for session in self.session_manager.sessions[self.user_manager.logged_in_user]:
-                if session['actual_duration']:
-                    total_minutes += session['actual_duration']
-        
-        hours = int(total_minutes // 60)
-        minutes = int(total_minutes % 60)
+        print(f"Badges Earned: {', '.join(badges) if badges else 'None'}")
         print(f"Total Study Time: {hours} hours and {minutes} minutes")
-
+        
         self.check_badges(user)
-
+        
         print("\n=== PERSONALIZED MESSAGE ===")
         print(self.generate_personalized_message(user))
     
     def check_badges(self, user):
+        cursor = self.db.cursor
         new_badges = []
         
-        if user['streak'] >= 7 and "7-Day Streak" not in user['badges']:
-            new_badges.append("7-Day Streak")
-        if user['streak'] >= 30 and "30-Day Streak" not in user['badges']:
-            new_badges.append("30-Day Streak")
-        if user['points'] >= 1000 and "1000 Points" not in user['badges']:
-            new_badges.append("1000 Points")
+        if user['streak'] >= 7:
+            cursor.execute("SELECT * FROM badges WHERE user_id = %s AND badge_name = %s", (user['user_id'], "7-Day Streak"))
+            if not cursor.fetchone():
+                new_badges.append("7-Day Streak")
+        
+        if user['streak'] >= 30:
+            cursor.execute("SELECT * FROM badges WHERE user_id = %s AND badge_name = %s", (user['user_id'], "30-Day Streak"))
+            if not cursor.fetchone():
+                new_badges.append("30-Day Streak")
+        
+        if user['points'] >= 1000:
+            cursor.execute("SELECT * FROM badges WHERE user_id = %s AND badge_name = %s", (user['user_id'], "1000 Points"))
+            if not cursor.fetchone():
+                new_badges.append("1000 Points")
+        
+        for badge in new_badges:
+            cursor.execute("INSERT INTO badges (user_id, badge_name) VALUES (%s, %s)", (user['user_id'], badge))
         
         if new_badges:
-            user['badges'].extend(new_badges)
-            self.user_manager.save_users()
+            self.db.commit()
             print(f"\n==> New Badges Earned: {', '.join(new_badges)}")
     
     def generate_personalized_message(self, user):
@@ -255,76 +186,66 @@ class ProgressReport:
         else:
             messages.append(f"With {user['points']} points, you're showing serious dedication!")
         
-        if not user['badges']:
+        cursor = self.db.cursor
+        cursor.execute("SELECT COUNT(*) as count FROM badges WHERE user_id = %s", (user['user_id'],))
+        badge_count = cursor.fetchone()['count']
+        
+        if badge_count == 0:
             messages.append("Complete challenges to earn your first badge!")
         else:
-            messages.append(f"Your badges show your commitment: {', '.join(user['badges'])}")
+            messages.append(f"Your {badge_count} badges show your commitment!")
         
         return " ".join(messages)
 
+# Leaderboard class
 class Leaderboard:
     """Handle user rankings and leaderboard display."""
-   def __init__(self, user_manager):
-        self.user_manager = user_manager
-    
-    def view_leaderboard(self):
-        print("\n=== LEADERBOARD ===")
-        print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
-            "Rank", "Username", "Streak", "Points", "Badges"))
 
-        sorted_users = sorted(
-            self.user_manager.users,
-            key=lambda x: (-x['streak'], -x['points'], len(x['badges']))
-        )
-        
-        for rank, user in enumerate(sorted_users[:10], 1):
-            badges = ', '.join(user['badges'][:3]) + ('...' if len(user['badges']) > 3 else '')
-            print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
-                rank, user['username'], user['streak'], user['points'], badges))
-
+# Study group management class
 class StudyGroup:
     """Handle study groups and resources."""
-    def __init__(self, user_manager):
-        self.user_manager = user_manager
 
-    def modify_schedule(self):
-        if not self.user_manager.is_logged_in():
+# Study reminder management class
+class StudyReminder:
+    def __init__(self, db):
+        self.db = db
+
+    def modify_schedule(self, user):
+        if not user.is_logged_in():
             print("==> Please log in to modify your study schedule.")
             return
-
-        user = self.user_manager.get_current_user()
-        if not user:
-            return
-
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+        
+        cursor.execute("SELECT * FROM study_reminders WHERE user_id = %s", (user_id,))
+        reminders = cursor.fetchall()
+        
         print("\nYour current reminders:")
-        for i, reminder in enumerate(user["study_reminders"], 1):
+        for i, reminder in enumerate(reminders, 1):
             print(f"{i}. {reminder['time']} - {reminder['days']}")
-
+        
         print("\n1. Add new reminder")
         print("2. Remove reminder")
         choice = input("Choose an option: ")
-
+        
         if choice == "1":
             time = input("Enter reminder time (HH:MM format): ")
             days = input("Enter days (comma-separated, e.g., Mon,Tue,Wed): ")
-
-            user["study_reminders"].append({
-                "time": time,
-                "days": days,
-                "enabled": True
-            })
-            self.user_manager.save_users()
+            cursor.execute("INSERT INTO study_reminders (user_id, time, days, enabled) VALUES (%s, %s, %s, %s)", 
+                           (user_id, time, days, True))
+            self.db.commit()
             print("==> Reminder added successfully!")
         elif choice == "2":
-            if not user["study_reminders"]:
+            if not reminders:
                 print("==> No reminders to remove.")
                 return
-
             try:
                 index = int(input("Enter reminder number to remove: ")) - 1
-                if 0 <= index < len(user["study_reminders"]):
-                    user["study_reminders"].pop(index)
-                    self.user_manager.save_users()
+                if 0 <= index < len(reminders):
+                    reminder_id = reminders[index]['reminder_id']
+                    cursor.execute("DELETE FROM study_reminders WHERE reminder_id = %s", (reminder_id,))
+                    self.db.commit()
                     print("==> Reminder removed successfully!")
                 else:
                     print("==> Invalid selection.")
@@ -333,13 +254,15 @@ class StudyGroup:
         else:
             print("==> Invalid choice.")
 
+# Main application function
 def main():
-    user = User()
-    study_session = StudySession()
-    progress_report = ProgressReport(user, study_session)
-    leaderboard = Leaderboard(user)
-    study_group = StudyGroup()
-    study_reminder = StudyReminder(user)
+    db = Database()
+    user = User(db)
+    study_session = StudySession(db)
+    progress_report = ProgressReport(user, study_session, db)
+    leaderboard = Leaderboard(db)
+    study_group = StudyGroup(db)
+    study_reminder = StudyReminder(db)
     
     print("============================================")
     print("WELCOME TO STUDYSPARK - YOUR STUDY MOTIVATOR")
@@ -411,11 +334,13 @@ def main():
                 else:
                     print("==> Invalid choice.")
             elif choice == '7':
-                study_reminder.modify_schedule()
+                study_reminder.modify_schedule(user)
             elif choice == '8':
                 user.logout()
             else:
                 print("==> Invalid choice. Please try again.")
+    
+    db.close()
 
 if __name__ == "__main__":
     main()

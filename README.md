@@ -1,7 +1,7 @@
 # StudySpark 📚
 
 ## Overview
-StudySpark is a CLI-based study assistant that helps users track their study sessions, monitor progress, earn badges, and stay motivated with AI-generated encouragement. Data is stored in JSON files for simplicity and portability.
+StudySpark is a CLI-based study assistant that helps users track their study sessions, monitor progress, earn badges, and stay motivated with AI-generated encouragement. Data is stored in a MySQL database for simplicity and portability.
 
 ## Features 🚀
 - **User Registration & Authentication**
@@ -21,11 +21,7 @@ StudySpark is a CLI-based study assistant that helps users track their study ses
    git clone https://github.com/Abi-Seth/STUDYSPARK_PLP-2_C3_Group3.git
    cd studyspark
    ```
-2. Install dependencies:
-   ```bash
-   pip install transformers
-   ```
-3. Run the application:
+2. Run the application:
    ```bash
    python main.py
    ```
@@ -38,10 +34,13 @@ StudySpark is a CLI-based study assistant that helps users track their study ses
 5. Join or create study groups and share resources.
 
 ## Data Storage 📂
-StudySpark uses JSON files to store user data, sessions, and progress, ensuring ease of access and portability.
+StudySpark uses MYSQL to store user data, sessions, and progress, ensuring ease of access and portability.
 
 ## Screenshots 📸
-_Add screenshots of the application here._
+![alt text](samples/image.png)
+![alt text](samples/image-1.png)
+![alt text](samples/image-2.png)
+![alt text](samples/image-3.png)
 
 ## Contributors 🤝
 - **Gloria** - Registration & Authentication
