@@ -101,8 +101,104 @@ class User:
         return cursor.fetchone()
 
 # Study session management class
+
 class StudySession:
-    """Handles study session tracking for users"""
+    """Handles study session tracking for users."""
+
+    def __init__(self, db):
+        self.db = db
+
+    def start_session(self, user):
+        """Start a new study session for the user."""
+        if not user.is_logged_in():
+            print("==> Please log in to start a study session.")
+            return
+
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+
+        # Record the start time of the session
+        start_time = datetime.now()
+
+        cursor.execute("INSERT INTO study_sessions (user_id, start_time, status) VALUES (%s, %s, %s)",
+                       (user_id, start_time, "Ongoing"))
+        self.db.commit()
+
+        print(f"==> Study session started for {user.logged_in_user} at {start_time}.")
+
+    def end_session(self, user):
+        """End the current study session for the user."""
+        if not user.is_logged_in():
+            print("==> Please log in to end a study session.")
+            return
+
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+
+        # Get the ongoing study session
+        cursor.execute("SELECT * FROM study_sessions WHERE user_id = %s AND status = %s ORDER BY start_time DESC LIMIT 1",
+                       (user_id, "Ongoing"))
+        session = cursor.fetchone()
+
+        if not session:
+            print("==> No ongoing study session found.")
+            return
+
+        # Calculate the duration of the session
+        end_time = datetime.now()
+        duration = (end_time - session['start_time']).total_seconds() / 60  # in minutes
+
+        # Update the session to completed
+        cursor.execute("UPDATE study_sessions SET end_time = %s, actual_duration = %s, status = %s WHERE session_id = %s",
+                       (end_time, duration, "Completed", session['session_id']))
+        self.db.commit()
+
+        # Update user progress (e.g., add points based on session duration)
+        cursor.execute("UPDATE users SET points = points + %s WHERE user_id = %s", (duration, user_id))
+        self.db.commit()
+
+        print(f"==> Study session ended for {user.logged_in_user} at {end_time}. Duration: {duration} minutes.")
+
+    def view_all_sessions(self, user):
+        """View all study sessions for the logged-in user."""
+        if not user.is_logged_in():
+            print("==> Please log in to view your study sessions.")
+            return
+
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+
+        # Fetch all study sessions for the user
+        cursor.execute("SELECT * FROM study_sessions WHERE user_id = %s ORDER BY start_time DESC", (user_id,))
+        sessions = cursor.fetchall()
+
+        if not sessions:
+            print("==> No study sessions found.")
+            return
+
+        print("\n=== STUDY SESSIONS ===")
+        for session in sessions:
+            start_time = session['start_time']
+            end_time = session.get('end_time', 'N/A')
+            duration = session.get('actual_duration', 'N/A')
+            status = session['status']
+            print(f"Start: {start_time}, End: {end_time}, Duration: {duration} mins, Status: {status}")
+
+    def get_session_progress(self, user):
+        """Get the progress of a specific session."""
+        if not user.is_logged_in():
+            print("==> Please log in to view your session progress.")
+            return
+
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+
+        # Get the ongoing session
+        cursor.execute("SELECT * FROM study_sessions")
 
 # Progress report class
 class ProgressReport:
