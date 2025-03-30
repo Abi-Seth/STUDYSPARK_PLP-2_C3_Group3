@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 -- Registration, login and logout (Gloria)
 -- Main menu
     1. start a study session (Denyse)
@@ -26,6 +25,3 @@
 
 
 NOTE: We are using .JSON files to store and read data
-=======
-# submission_reminder_app_GLOR205
->>>>>>> e1b46aa76ef832b7d272c9e8a9860b46c2efbb25

@@ -156,10 +156,35 @@ class StudySession:
         self.save_sessions()
         print(f"\nSession '{last_session['session_name']}' completed!")
         print(f"Total time spent: {elapsed_time:.2f} minutes.")
+    
+    def view_all_sessions(self, user):
+        if not user.is_logged_in():
+            print("==> Please log in to view your sessions.")
+            return
+        
+        if user.logged_in_user not in self.sessions or not self.sessions[user.logged_in_user]:
+            print("==> No sessions found.")
+            return
+        
+        print("\nYour Study Sessions:")
+        print("{:<5} {:<20} {:<15} {:<15} {:<15} {:<10}".format(
+            "No.", "Name", "Start Time", "End Time", "Duration", "Status"))
+        
+        for i, session in enumerate(self.sessions[user.logged_in_user], 1):
+            duration = f"{session['actual_duration']} min" if session['actual_duration'] else "N/A"
+            end_time = session['end_time'] if session['end_time'] else "N/A"
+            print("{:<5} {:<20} {:<15} {:<15} {:<15} {:<10}".format(
+                i, session['name'], session['start_time'], end_time, duration, session['status']))
 
-   
-class StudyGroups:
-    """Handle study sessions and AI encouragement messages."""
+    def get_encouragement(self):
+        try:
+            response = requests.get("https://api.quotable.io/random?tags=inspirational")
+            if response.status_code == 200:
+                data = response.json()
+                return f"\n==> Encouragement: {data['content']} - {data['author']}\n"
+        except requests.exceptions.RequestException:
+            pass
+        return "\n==> Keep going! Your hard work will pay off.\n"
 
 class ProgressReport:
     """Handle user progress tracking and reporting."""
