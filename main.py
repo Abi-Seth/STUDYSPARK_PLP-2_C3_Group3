@@ -200,6 +200,28 @@ class ProgressReport:
 # Leaderboard class
 class Leaderboard:
     """Handle user rankings and leaderboard display."""
+    def __init__(self, db):
+        self.db = db
+
+    def view_leaderboard(self):
+        cursor = self.db.cursor
+        cursor.execute("""
+            SELECT u.username, u.streak, u.points, COUNT(b.badge_id) as badge_count
+            FROM users u
+            LEFT JOIN badges b ON u.user_id = b.user_id
+            GROUP BY u.user_id
+            ORDER BY u.streak DESC, u.points DESC, badge_count DESC
+            LIMIT 10
+        """)
+        leaders = cursor.fetchall()
+
+        print("\n=== LEADERBOARD ===")
+        print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
+            "Rank", "Username", "Streak", "Points", "Badges"))
+
+        for rank, leader in enumerate(leaders, 1):
+            print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
+                rank, leader['username'], leader['streak'], leader['points'], leader['badge_count']))
 
 # Study group management class
 class StudyGroup:
