@@ -323,6 +323,53 @@ class Leaderboard:
 class StudyGroup:
     """Handle study groups and resources."""
 
+    def join_group(self, user):
+        if not user.is_logged_in():
+            print("==> Please log in to join a study group.")
+            return
+        group_id = input("Enter the group ID to join: ")
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+        cursor.execute("SELECT * FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+        if cursor.fetchone():
+            print("==> You are already a member of this group.")
+        else:
+            cursor.execute("INSERT INTO group_members (group_id, user_id) VALUES (%s, %s)", (group_id, user_id))
+            self.db.commit()
+            print("==> Joined the group successfully!")
+
+    def add_resource(self, user):
+        if not user.is_logged_in():
+            print("==> Please log in to add a resource.")
+            return
+        group_id = input("Enter the group ID to add resource to: ")
+        resource_name = input("Enter the resource name: ")
+        resource_link = input("Enter the resource link: ")
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+        cursor.execute("SELECT * FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+        if not cursor.fetchone():
+            print("==> You are not a member of this group.")
+            return
+        cursor.execute("INSERT INTO group_resources (group_id, resource_name, resource_link) VALUES (%s, %s, %s)",
+                       (group_id, resource_name, resource_link))
+        self.db.commit()
+        print("==> Resource added successfully!")
+
+    def view_resources(self):
+        group_id = input("Enter the group ID to view resources: ")
+        cursor = self.db.cursor
+        cursor.execute("SELECT * FROM group_resources WHERE group_id = %s", (group_id,))
+        resources = cursor.fetchall()
+        if not resources:
+            print("==> No resources found for this group.")
+            return
+        print("\nGroup Resources:")
+        for resource in resources:
+            print(f"- {resource['resource_name']}: {resource['resource_link']}")
+
 # Study reminder management class
 class StudyReminder:
     def __init__(self, db):
