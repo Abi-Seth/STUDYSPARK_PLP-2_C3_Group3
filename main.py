@@ -323,6 +323,92 @@ class Leaderboard:
 class StudyGroup:
     """Handle study groups and resources."""
 
+    def __init__(self, db):
+        """Initialize the StudyGroup class with database connection."""
+        self.db = db
+    
+    def create_group(self, user):
+        """Create a new study group."""
+        if not user.is_logged_in():
+            print("==> Please log in to create a study group.")
+            return
+            
+        cursor = self.db.cursor
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        user_id = cursor.fetchone()['user_id']
+        
+        group_name = input("Enter group name: ")
+        description = input("Enter group description: ")
+        subject = input("Enter subject/topic: ")
+        max_members = input("Enter maximum number of members (leave blank for unlimited): ")
+        
+        if not max_members:
+            max_members = None
+        else:
+            try:
+                max_members = int(max_members)
+                if max_members <= 0:
+                    print("==> Maximum members must be a positive number.")
+                    return
+            except ValueError:
+                print("==> Please enter a valid number for maximum members.")
+                return
+        
+        # Check if a group with this name already exists
+        cursor.execute("SELECT * FROM study_groups WHERE group_name = %s", (group_name,))
+        if cursor.fetchone():
+            print("==> A group with this name already exists. Please choose a different name.")
+            return
+            
+        # Create the group
+        cursor.execute(
+            "INSERT INTO study_groups (group_name, description, subject, max_members, creator_id, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
+            (group_name, description, subject, max_members, user_id, datetime.now())
+        )
+        self.db.commit()
+        
+        # Get the new group's ID
+        cursor.execute("SELECT group_id FROM study_groups WHERE group_name = %s", (group_name,))
+        group_id = cursor.fetchone()['group_id']
+        
+        # Add the creator as a member
+        cursor.execute(
+            "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (%s, %s, %s, %s)",
+            (group_id, user_id, "admin", datetime.now())
+        )
+        self.db.commit()
+        
+        print(f"==> Study group '{group_name}' created successfully!")
+    
+    def view_groups(self):
+        """View all available study groups."""
+        cursor = self.db.cursor
+        cursor.execute("""
+            SELECT sg.group_id, sg.group_name, sg.description, sg.subject, 
+                   sg.max_members, u.username as creator, 
+                   COUNT(gm.user_id) as member_count,
+                   sg.created_at
+            FROM study_groups sg
+            JOIN users u ON sg.creator_id = u.user_id
+            LEFT JOIN group_members gm ON sg.group_id = gm.group_id
+            GROUP BY sg.group_id
+            ORDER BY sg.created_at DESC
+        """)
+        groups = cursor.fetchall()
+        
+        if not groups:
+            print("==> No study groups found.")
+            return
+            
+        print("\n=== AVAILABLE STUDY GROUPS ===")
+        for i, group in enumerate(groups, 1):
+            max_members_display = group['max_members'] if group['max_members'] else "Unlimited"
+            print(f"\n{i}. {group['group_name']} - {group['subject']}")
+            print(f"   Description: {group['description']}")
+            print(f"   Created by: {group['creator']}")
+            print(f"   Members: {group['member_count']}/{max_members_display}")
+            print(f"   Created: {group['created_at'].strftime('%Y-%m-%d')}")
+
 # Study reminder management class
 class StudyReminder:
     def __init__(self, db):
