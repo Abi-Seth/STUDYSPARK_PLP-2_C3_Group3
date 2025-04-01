@@ -101,104 +101,96 @@ class User:
         return cursor.fetchone()
 
 # Study session management class
-
 class StudySession:
-    """Handles study session tracking for users."""
-
     def __init__(self, db):
         self.db = db
 
     def start_session(self, user):
-        """Start a new study session for the user."""
         if not user.is_logged_in():
-            print("==> Please log in to start a study session.")
+            print("Please log in before starting a session.")
             return
-
+        username = user.logged_in_user
         cursor = self.db.cursor
-        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (username,))
         user_id = cursor.fetchone()['user_id']
-
-        # Record the start time of the session
+        
+        session_name = input("Enter the study session name: ")
+        duration = int(input("Enter the duration of the session in minutes: "))
         start_time = datetime.now()
-
-        cursor.execute("INSERT INTO study_sessions (user_id, start_time, status) VALUES (%s, %s, %s)",
-                       (user_id, start_time, "Ongoing"))
+        
+        cursor.execute(
+            "INSERT INTO study_sessions (user_id, session_name, duration, start_time, status) VALUES (%s, %s, %s, %s, %s)",
+            (user_id, session_name, duration, start_time, "In Progress")
+        )
         self.db.commit()
-
-        print(f"==> Study session started for {user.logged_in_user} at {start_time}.")
+        print(f"\nSession '{session_name}' has started for {username}.")
+        print(f"Duration: {duration} minutes. Stay focused!")
 
     def end_session(self, user):
-        """End the current study session for the user."""
         if not user.is_logged_in():
-            print("==> Please log in to end a study session.")
+            print("Please log in before ending a session.")
             return
-
+        username = user.logged_in_user
         cursor = self.db.cursor
-        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (username,))
         user_id = cursor.fetchone()['user_id']
-
-        # Get the ongoing study session
-        cursor.execute("SELECT * FROM study_sessions WHERE user_id = %s AND status = %s ORDER BY start_time DESC LIMIT 1",
-                       (user_id, "Ongoing"))
+        
+        cursor.execute(
+            "SELECT * FROM study_sessions WHERE user_id = %s AND status = %s ORDER BY start_time DESC LIMIT 1",
+            (user_id, "In Progress")
+        )
         session = cursor.fetchone()
-
         if not session:
-            print("==> No ongoing study session found.")
+            print("No active study session found.")
             return
-
-        # Calculate the duration of the session
+        
         end_time = datetime.now()
-        duration = (end_time - session['start_time']).total_seconds() / 60  # in minutes
-
-        # Update the session to completed
-        cursor.execute("UPDATE study_sessions SET end_time = %s, actual_duration = %s, status = %s WHERE session_id = %s",
-                       (end_time, duration, "Completed", session['session_id']))
+        elapsed_time = (end_time - session['start_time']).total_seconds() / 60
+        
+        cursor.execute(
+            "UPDATE study_sessions SET end_time = %s, actual_duration = %s, status = %s WHERE session_id = %s",
+            (end_time, elapsed_time, "Completed", session['session_id'])
+        )
         self.db.commit()
-
-        # Update user progress (e.g., add points based on session duration)
-        cursor.execute("UPDATE users SET points = points + %s WHERE user_id = %s", (duration, user_id))
-        self.db.commit()
-
-        print(f"==> Study session ended for {user.logged_in_user} at {end_time}. Duration: {duration} minutes.")
+        print(f"\nSession '{session['session_name']}' completed!")
+        print(f"Total time spent: {elapsed_time:.2f} minutes.")
 
     def view_all_sessions(self, user):
-        """View all study sessions for the logged-in user."""
         if not user.is_logged_in():
-            print("==> Please log in to view your study sessions.")
+            print("==> Please log in to view your sessions.")
             return
-
+        username = user.logged_in_user
         cursor = self.db.cursor
-        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (username,))
         user_id = cursor.fetchone()['user_id']
-
-        # Fetch all study sessions for the user
-        cursor.execute("SELECT * FROM study_sessions WHERE user_id = %s ORDER BY start_time DESC", (user_id,))
+        
+        cursor.execute("SELECT * FROM study_sessions WHERE user_id = %s", (user_id,))
         sessions = cursor.fetchall()
-
+        
         if not sessions:
-            print("==> No study sessions found.")
+            print("==> No sessions found.")
             return
+        
+        print("\nYour Study Sessions:")
+        print("{:<5} {:<20} {:<25} {:<25} {:<15} {:<10}".format(
+            "No.", "Name", "Start Time", "End Time", "Duration", "Status"))
+        
+        for i, session in enumerate(sessions, 1):
+            start_time = session['start_time'].strftime("%Y-%m-%d %H:%M:%S") if session['start_time'] else "N/A"
+            end_time = session['end_time'].strftime("%Y-%m-%d %H:%M:%S") if session['end_time'] else "N/A"
+            duration = f"{session['actual_duration']:.2f} min" if session['actual_duration'] else "N/A"
+            print("{:<5} {:<20} {:<25} {:<25} {:<15} {:<10}".format(
+                i, session['session_name'], start_time, end_time, duration, session['status']))
 
-        print("\n=== STUDY SESSIONS ===")
-        for session in sessions:
-            start_time = session['start_time']
-            end_time = session.get('end_time', 'N/A')
-            duration = session.get('actual_duration', 'N/A')
-            status = session['status']
-            print(f"Start: {start_time}, End: {end_time}, Duration: {duration} mins, Status: {status}")
-
-    def get_session_progress(self, user):
-        """Get the progress of a specific session."""
-        if not user.is_logged_in():
-            print("==> Please log in to view your session progress.")
-            return
-
-        cursor = self.db.cursor
-        cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
-        user_id = cursor.fetchone()['user_id']
-
-        # Get the ongoing session
-        cursor.execute("SELECT * FROM study_sessions")
+    def get_encouragement(self):
+        try:
+            response = requests.get("https://api.quotable.io/random?tags=inspirational")
+            if response.status_code == 200:
+                data = response.json()
+                return f"\n==> Encouragement: {data['content']} - {data['author']}\n"
+        except requests.exceptions.RequestException:
+            pass
+        return "\n==> Keep going! Your hard work will pay off.\n"
 
 # Progress report class
 class ProgressReport:
@@ -295,10 +287,9 @@ class ProgressReport:
 
 # Leaderboard class
 class Leaderboard:
-    """Handle user rankings and leaderboard display."""
     def __init__(self, db):
         self.db = db
-
+    
     def view_leaderboard(self):
         cursor = self.db.cursor
         cursor.execute("""
@@ -310,105 +301,48 @@ class Leaderboard:
             LIMIT 10
         """)
         leaders = cursor.fetchall()
-
+        
         print("\n=== LEADERBOARD ===")
         print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
             "Rank", "Username", "Streak", "Points", "Badges"))
-
+        
         for rank, leader in enumerate(leaders, 1):
             print("{:<5} {:<20} {:<10} {:<10} {:<20}".format(
                 rank, leader['username'], leader['streak'], leader['points'], leader['badge_count']))
 
 # Study group management class
 class StudyGroup:
-    """Handle study groups and resources."""
-
-
     def __init__(self, db):
-        """Initialize the StudyGroup class with database connection."""
         self.db = db
-    
+
     def create_group(self, user):
-        """Create a new study group."""
         if not user.is_logged_in():
             print("==> Please log in to create a study group.")
             return
-            
+        group_name = input("Enter the study group name: ")
         cursor = self.db.cursor
         cursor.execute("SELECT user_id FROM users WHERE username = %s", (user.logged_in_user,))
-        user_id = cursor.fetchone()['user_id']
-        
-        group_name = input("Enter group name: ")
-        description = input("Enter group description: ")
-        subject = input("Enter subject/topic: ")
-        max_members = input("Enter maximum number of members (leave blank for unlimited): ")
-        
-        if not max_members:
-            max_members = None
-        else:
-            try:
-                max_members = int(max_members)
-                if max_members <= 0:
-                    print("==> Maximum members must be a positive number.")
-                    return
-            except ValueError:
-                print("==> Please enter a valid number for maximum members.")
-                return
-        
-        # Check if a group with this name already exists
-        cursor.execute("SELECT * FROM study_groups WHERE group_name = %s", (group_name,))
-        if cursor.fetchone():
-            print("==> A group with this name already exists. Please choose a different name.")
-            return
-            
-        # Create the group
-        cursor.execute(
-            "INSERT INTO study_groups (group_name, description, subject, max_members, creator_id, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-            (group_name, description, subject, max_members, user_id, datetime.now())
-        )
+        creator_id = cursor.fetchone()['user_id']
+        cursor.execute("INSERT INTO study_groups (group_name, creator_id) VALUES (%s, %s)", (group_name, creator_id))
         self.db.commit()
-        
-        # Get the new group's ID
-        cursor.execute("SELECT group_id FROM study_groups WHERE group_name = %s", (group_name,))
-        group_id = cursor.fetchone()['group_id']
-        
-        # Add the creator as a member
-        cursor.execute(
-            "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (%s, %s, %s, %s)",
-            (group_id, user_id, "admin", datetime.now())
-        )
-        self.db.commit()
-        
         print(f"==> Study group '{group_name}' created successfully!")
-    
+
     def view_groups(self):
-        """View all available study groups."""
         cursor = self.db.cursor
         cursor.execute("""
-            SELECT sg.group_id, sg.group_name, sg.description, sg.subject, 
-                   sg.max_members, u.username as creator, 
-                   COUNT(gm.user_id) as member_count,
-                   sg.created_at
-            FROM study_groups sg
-            JOIN users u ON sg.creator_id = u.user_id
-            LEFT JOIN group_members gm ON sg.group_id = gm.group_id
-            GROUP BY sg.group_id
-            ORDER BY sg.created_at DESC
+            SELECT g.group_id, g.group_name, u.username as creator, COUNT(m.user_id) as members 
+            FROM study_groups g 
+            LEFT JOIN group_members m ON g.group_id = m.group_id 
+            JOIN users u ON g.creator_id = u.user_id 
+            GROUP BY g.group_id
         """)
         groups = cursor.fetchall()
-        
         if not groups:
             print("==> No study groups found.")
             return
-            
-        print("\n=== AVAILABLE STUDY GROUPS ===")
-        for i, group in enumerate(groups, 1):
-            max_members_display = group['max_members'] if group['max_members'] else "Unlimited"
-            print(f"\n{i}. {group['group_name']} - {group['subject']}")
-            print(f"   Description: {group['description']}")
-            print(f"   Created by: {group['creator']}")
-            print(f"   Members: {group['member_count']}/{max_members_display}")
-            print(f"   Created: {group['created_at'].strftime('%Y-%m-%d')}")
+        print("\nStudy Groups:")
+        for group in groups:
+            print(f"ID: {group['group_id']}, Name: {group['group_name']}, Creator: {group['creator']}, Members: {group['members']}")
 
     def join_group(self, user):
         if not user.is_logged_in():
@@ -440,7 +374,7 @@ class StudyGroup:
         if not cursor.fetchone():
             print("==> You are not a member of this group.")
             return
-        cursor.execute("INSERT INTO group_resources (group_id, resource_name, resource_link) VALUES (%s, %s, %s)",
+        cursor.execute("INSERT INTO group_resources (group_id, resource_name, resource_link) VALUES (%s, %s, %s)", 
                        (group_id, resource_name, resource_link))
         self.db.commit()
         print("==> Resource added successfully!")
@@ -456,7 +390,6 @@ class StudyGroup:
         print("\nGroup Resources:")
         for resource in resources:
             print(f"- {resource['resource_name']}: {resource['resource_link']}")
-
 
 # Study reminder management class
 class StudyReminder:
